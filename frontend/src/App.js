@@ -174,9 +174,19 @@ export default function App() {
   const [leaveForm, setLeaveForm] = useState({employee_id:"",leave_type_id:"",from_date:"",to_date:"",total_days:"",reason:""});
   const [assetForm, setAssetForm] = useState({asset_id:"",employee_id:""});
 
-  const isAdmin = user?.role === "admin";
-  const isManager = user?.role === "manager";
-  const canEdit = isAdmin;
+  // ── ROLE FLAGS ──────────────────────────────────────────
+  const isAdmin    = user?.role === "admin";
+  const isHR       = user?.role === "hr";
+  const isManager  = user?.role === "manager";
+  const isEmployee = user?.role === "employee";
+
+  // What each role can do
+  const canEditEmployee   = isAdmin || isHR;
+  const canDeleteEmployee = isAdmin;
+  const canApproveLeave   = isAdmin || isHR || isManager;
+  const canAllocateAsset  = isAdmin;
+  const canViewReports    = isAdmin || isHR;
+  const canViewAllAttendance = isAdmin || isHR || isManager;
 
   const fetchAll = () => {
     axios.get(`${API}/employees`).then(r=>setEmployees(r.data)).catch(()=>{});
@@ -212,14 +222,15 @@ export default function App() {
     e.department_name?.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Nav items based on role
   const navItems = [
-    {key:"dashboard",icon:"📊",label:"Dashboard"},
-    {key:"employees",icon:"👥",label:"Employees"},
-    {key:"attendance",icon:"🕐",label:"Attendance"},
-    {key:"leave",icon:"📅",label:"Leave"},
-    {key:"assets",icon:"💻",label:"Assets"},
-    {key:"reports",icon:"📈",label:"Reports"},
-    {key:"notifications",icon:"🔔",label:`Notifications${unreadCount>0?` (${unreadCount})`:""}`},
+    {key:"dashboard", icon:"📊", label:"Dashboard"},
+    {key:"employees", icon:"👥", label:"Employees"},
+    {key:"attendance", icon:"🕐", label:"Attendance"},
+    {key:"leave", icon:"📅", label:"Leave"},
+    {key:"assets", icon:"💻", label:"Assets"},
+    ...(canViewReports ? [{key:"reports", icon:"📈", label:"Reports"}] : []),
+    {key:"notifications", icon:"🔔", label:`Notifications${unreadCount>0?` (${unreadCount})`:""}`},
   ];
 
   if(!user) return <AuthPage onLogin={(u)=>setUser(u)}/>;
@@ -246,6 +257,7 @@ export default function App() {
 
       <div className="main">
 
+        {/* ── DASHBOARD ── */}
         {tab==="dashboard"&&(
           <div>
             <h1 className="page-title">Dashboard</h1>
@@ -347,16 +359,36 @@ export default function App() {
           </div>
         )}
 
+        {/* ── EMPLOYEES ── */}
         {tab==="employees"&&(
           <div>
             <h1 className="page-title">Employees</h1>
+
+            {/* Role info banner */}
+            <div style={{background:"#EEEDFE",borderRadius:10,padding:"10px 16px",marginBottom:16,fontSize:13,color:"#3C3489"}}>
+              {isAdmin&&"👑 Admin — You can view, edit and delete all employees."}
+              {isHR&&"👩‍💼 HR — You can view and edit employee details."}
+              {isManager&&"👔 Manager — You can view all employees."}
+              {isEmployee&&"👤 Employee — You can view the employee directory."}
+            </div>
+
             <div className="card">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div className="card-title" style={{margin:0}}>👥 All employees — {filteredEmployees.length} total</div>
                 <input placeholder="🔍 Search by name, email, department..." value={search} onChange={e=>setSearch(e.target.value)} style={{padding:"8px 14px",border:"1px solid #e0e0e0",borderRadius:8,fontSize:13,width:300}}/>
               </div>
               <table>
-                <thead><tr><th>Employee</th><th>Designation</th><th>Department</th><th>Phone</th><th>Salary</th><th>Role</th>{canEdit&&<th>Actions</th>}</tr></thead>
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Designation</th>
+                    <th>Department</th>
+                    <th>Phone</th>
+                    {(isAdmin||isHR)&&<th>Salary</th>}
+                    <th>Role</th>
+                    {canEditEmployee&&<th>Actions</th>}
+                  </tr>
+                </thead>
                 <tbody>
                   {filteredEmployees.map(emp=>(
                     <tr key={emp.id}>
@@ -369,9 +401,16 @@ export default function App() {
                       <td>{emp.designation||"—"}</td>
                       <td><span className="pill pill-purple">{emp.department_name||"—"}</span></td>
                       <td>{emp.phone||"—"}</td>
-                      <td>{emp.salary?`₹${Number(emp.salary).toLocaleString("en-IN")}`:"—"}</td>
+                      {(isAdmin||isHR)&&<td>{emp.salary?`₹${Number(emp.salary).toLocaleString("en-IN")}`:"—"}</td>}
                       <td><span className={`pill ${emp.role==="admin"?"pill-red":emp.role==="hr"?"pill-green":emp.role==="manager"?"pill-amber":"pill-blue"}`}>{emp.role}</span></td>
-                      {canEdit&&<td><div className="actions-row"><button className="btn btn-edit" onClick={()=>setEditEmp(emp)}>Edit</button><button className="btn btn-danger" onClick={()=>deleteEmployee(emp.id)}>Delete</button></div></td>}
+                      {canEditEmployee&&(
+                        <td>
+                          <div className="actions-row">
+                            <button className="btn btn-edit" onClick={()=>setEditEmp(emp)}>Edit</button>
+                            {canDeleteEmployee&&<button className="btn btn-danger" onClick={()=>deleteEmployee(emp.id)}>Delete</button>}
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -380,6 +419,7 @@ export default function App() {
           </div>
         )}
 
+        {/* ── ATTENDANCE ── */}
         {tab==="attendance"&&(
           <div>
             <h1 className="page-title">Attendance</h1>
@@ -401,7 +441,8 @@ export default function App() {
                 </tbody>
               </table>
             </div>
-            {(canEdit||isManager)&&(
+
+            {canViewAllAttendance&&(
               <div className="card">
                 <div className="card-title">📋 Today's attendance — all employees</div>
                 <table>
@@ -423,6 +464,7 @@ export default function App() {
           </div>
         )}
 
+        {/* ── LEAVE ── */}
         {tab==="leave"&&(
           <div>
             <h1 className="page-title">Leave Management</h1>
@@ -475,7 +517,12 @@ export default function App() {
                         <td>{l.total_days}</td>
                         <td>{l.reason}</td>
                         <td><span className={`pill ${l.status==="Approved"?"pill-green":l.status==="Rejected"?"pill-red":"pill-amber"}`}>{l.status}</span></td>
-                        <td>{l.status==="Pending"&&(canEdit||isManager)&&<div className="actions-row"><button className="btn btn-success" onClick={()=>handleLeaveAction(l.id,"Approved")}>Approve</button><button className="btn btn-danger" onClick={()=>handleLeaveAction(l.id,"Rejected")}>Reject</button></div>}</td>
+                        <td>{l.status==="Pending"&&canApproveLeave&&(
+                          <div className="actions-row">
+                            <button className="btn btn-success" onClick={()=>handleLeaveAction(l.id,"Approved")}>Approve</button>
+                            <button className="btn btn-danger" onClick={()=>handleLeaveAction(l.id,"Rejected")}>Reject</button>
+                          </div>
+                        )}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -485,10 +532,12 @@ export default function App() {
           </div>
         )}
 
+        {/* ── ASSETS ── */}
         {tab==="assets"&&(
           <div>
             <h1 className="page-title">Asset Management</h1>
-            {canEdit&&(
+
+            {canAllocateAsset&&(
               <div className="card">
                 <div className="card-title">🖥️ Allocate asset</div>
                 <form onSubmit={allocateAsset}>
@@ -510,6 +559,7 @@ export default function App() {
                 </form>
               </div>
             )}
+
             <div className="card">
               <div className="card-title">📋 All assets</div>
               <table>
@@ -524,17 +574,18 @@ export default function App() {
                 </tbody>
               </table>
             </div>
+
             <div className="card">
               <div className="card-title">📦 Asset allocations</div>
               <table>
-                <thead><tr><th>Asset</th><th>Type</th><th>Employee</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Asset</th><th>Type</th><th>Employee</th><th>Date</th><th>Status</th>{canAllocateAsset&&<th>Actions</th>}</tr></thead>
                 <tbody>
                   {allocations.map(a=>(
                     <tr key={a.id}>
                       <td>{a.asset_name}</td><td>{a.asset_type}</td><td>{a.employee_name}</td>
                       <td>{a.allocated_date?.slice(0,10)}</td>
                       <td><span className={`pill ${a.status==="Allocated"?"pill-amber":"pill-green"}`}>{a.status}</span></td>
-                      <td>{a.status==="Allocated"&&canEdit&&<button className="btn btn-success" onClick={()=>returnAsset(a.id)}>Return</button>}</td>
+                      {canAllocateAsset&&<td>{a.status==="Allocated"&&<button className="btn btn-success" onClick={()=>returnAsset(a.id)}>Return</button>}</td>}
                     </tr>
                   ))}
                 </tbody>
@@ -543,7 +594,8 @@ export default function App() {
           </div>
         )}
 
-        {tab==="reports"&&(
+        {/* ── REPORTS (Admin + HR only) ── */}
+        {tab==="reports"&&canViewReports&&(
           <div>
             <h1 className="page-title">Reports & Analytics</h1>
             <div className="card">
@@ -581,6 +633,7 @@ export default function App() {
           </div>
         )}
 
+        {/* ── NOTIFICATIONS ── */}
         {tab==="notifications"&&(
           <div>
             <h1 className="page-title">Notifications</h1>
