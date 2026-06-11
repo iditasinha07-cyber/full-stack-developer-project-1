@@ -10,6 +10,7 @@ import assetRoutes from "./routes/assets.js";
 import notificationRoutes from "./routes/notifications.js";
 import reportRoutes from "./routes/reports.js";
 import attendanceRoutes from "./routes/attendance.js";
+import payrollRoutes from "./routes/payroll.js";
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use("/api/assets", assetRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/attendance", attendanceRoutes);
+app.use("/api/payroll", payrollRoutes);
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "OK", message: "iSoftzone HRMS API is running" });
