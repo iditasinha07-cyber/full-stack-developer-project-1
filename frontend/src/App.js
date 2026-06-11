@@ -76,7 +76,7 @@ function AuthPage({ onLogin }) {
           {mode === "signup" && <input name="name" placeholder="Full name" onChange={handle} required />}
           <input name="email" type="email" placeholder="Email address" onChange={handle} required />
           <div style={{position:"relative",marginBottom:12}}>
-            <input name="password" type={showPassword?"text":"password"} placeholder="Password" onChange={handle} required style={{width:"100%",paddingRight:40,marginBottom:0}} />
+            <input name="password" type={showPassword?"text":"password"} placeholder="Password" onChange={handle} required style={{width:"100%",paddingRight:40,marginBottom:0}}/>
             <span onClick={()=>setShowPassword(!showPassword)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",cursor:"pointer",fontSize:16,color:"#888"}}>
               {showPassword?"🙈":"👁️"}
             </span>
@@ -168,24 +168,22 @@ export default function App() {
   const [leaveReport, setLeaveReport] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [todayAttendance, setTodayAttendance] = useState([]);
+  const [checkedInToday, setCheckedInToday] = useState(false);
   const [editEmp, setEditEmp] = useState(null);
   const [leaveTab, setLeaveTab] = useState("apply");
   const [search, setSearch] = useState("");
   const [leaveForm, setLeaveForm] = useState({employee_id:"",leave_type_id:"",from_date:"",to_date:"",total_days:"",reason:""});
   const [assetForm, setAssetForm] = useState({asset_id:"",employee_id:""});
 
-  // ── ROLE FLAGS ──────────────────────────────────────────
   const isAdmin    = user?.role === "admin";
   const isHR       = user?.role === "hr";
   const isManager  = user?.role === "manager";
   const isEmployee = user?.role === "employee";
-
-  // What each role can do
-  const canEditEmployee   = isAdmin || isHR;
-  const canDeleteEmployee = isAdmin;
-  const canApproveLeave   = isAdmin || isHR || isManager;
-  const canAllocateAsset  = isAdmin;
-  const canViewReports    = isAdmin || isHR;
+  const canEditEmployee      = isAdmin || isHR;
+  const canDeleteEmployee    = isAdmin;
+  const canApproveLeave      = isAdmin || isHR || isManager;
+  const canAllocateAsset     = isAdmin;
+  const canViewReports       = isAdmin || isHR;
   const canViewAllAttendance = isAdmin || isHR || isManager;
 
   const fetchAll = () => {
@@ -201,7 +199,12 @@ export default function App() {
     axios.get(`${API}/attendance/today`).then(r=>setTodayAttendance(r.data)).catch(()=>{});
     if(user){
       axios.get(`${API}/notifications/${user.id}`).then(r=>setNotifications(r.data)).catch(()=>{});
-      axios.get(`${API}/attendance/employee/${user.id}`).then(r=>setAttendance(r.data)).catch(()=>{});
+      axios.get(`${API}/attendance/employee/${user.id}`).then(r=>{
+        setAttendance(r.data);
+        const today = new Date().toISOString().slice(0,10);
+        const todayRecord = r.data.find(a=>a.date?.slice(0,10)===today);
+        setCheckedInToday(!!todayRecord);
+      }).catch(()=>{});
     }
   };
 
@@ -213,7 +216,26 @@ export default function App() {
   const handleLeaveAction = async(id,action)=>{await axios.put(`${API}/leave/approve/${id}`,{action,remarks:action,approved_by:user.id});fetchAll();};
   const allocateAsset = async(e)=>{e.preventDefault();await axios.post(`${API}/assets/allocate`,assetForm);alert("Asset allocated!");fetchAll();};
   const returnAsset = async(id)=>{await axios.put(`${API}/assets/return/${id}`);fetchAll();};
-  const checkIn = async()=>{await axios.post(`${API}/attendance/checkin`,{employee_id:user.id});alert("Checked in!");fetchAll();};
+
+  const checkIn = async() => {
+    try {
+      await axios.post(`${API}/attendance/checkin`, {employee_id: user.id});
+      alert("✅ Checked in successfully!");
+      fetchAll();
+    } catch(err) {
+      alert(err.response?.data?.message || "Error checking in");
+    }
+  };
+
+  const checkOut = async() => {
+    try {
+      await axios.put(`${API}/attendance/checkout/${user.id}`);
+      alert("👋 Checked out successfully!");
+      fetchAll();
+    } catch(err) {
+      alert(err.response?.data?.message || "Error checking out");
+    }
+  };
 
   const unreadCount = notifications.filter(n=>!n.is_read).length;
   const filteredEmployees = employees.filter(e=>
@@ -222,18 +244,20 @@ export default function App() {
     e.department_name?.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Nav items based on role
   const navItems = [
-    {key:"dashboard", icon:"📊", label:"Dashboard"},
-    {key:"employees", icon:"👥", label:"Employees"},
-    {key:"attendance", icon:"🕐", label:"Attendance"},
-    {key:"leave", icon:"📅", label:"Leave"},
-    {key:"assets", icon:"💻", label:"Assets"},
-    ...(canViewReports ? [{key:"reports", icon:"📈", label:"Reports"}] : []),
-    {key:"notifications", icon:"🔔", label:`Notifications${unreadCount>0?` (${unreadCount})`:""}`},
+    {key:"dashboard",icon:"📊",label:"Dashboard"},
+    {key:"employees",icon:"👥",label:"Employees"},
+    {key:"attendance",icon:"🕐",label:"Attendance"},
+    {key:"leave",icon:"📅",label:"Leave"},
+    {key:"assets",icon:"💻",label:"Assets"},
+    ...(canViewReports?[{key:"reports",icon:"📈",label:"Reports"}]:[]),
+    {key:"notifications",icon:"🔔",label:`Notifications${unreadCount>0?` (${unreadCount})`:""}`},
   ];
 
   if(!user) return <AuthPage onLogin={(u)=>setUser(u)}/>;
+
+  const todayStr = new Date().toISOString().slice(0,10);
+  const myTodayRecord = attendance.find(a=>a.date?.slice(0,10)===todayStr);
 
   return (
     <div style={{display:"flex"}}>
@@ -257,7 +281,6 @@ export default function App() {
 
       <div className="main">
 
-        {/* ── DASHBOARD ── */}
         {tab==="dashboard"&&(
           <div>
             <h1 className="page-title">Dashboard</h1>
@@ -349,7 +372,12 @@ export default function App() {
                   <div key={a.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #f5f5f5"}}>
                     <div>
                       <div style={{fontSize:13,fontWeight:500}}>{a.employee_name}</div>
-                      <div style={{fontSize:11,color:"#888"}}>In: {a.check_in?.slice(0,5)||"—"} · Out: {a.check_out?.slice(0,5)||"—"}</div>
+                      <div style={{fontSize:11,color:"#888"}}>
+                        {a.status==="Absent"
+                          ? "Absent"
+                          : `In: ${a.check_in?.slice(0,5)||"—"} · Out: ${a.check_out?.slice(0,5)||"—"}`
+                        }
+                      </div>
                     </div>
                     <span className={`pill ${a.status==="Present"?"pill-green":a.status==="Late"?"pill-amber":"pill-red"}`}>{a.status}</span>
                   </div>
@@ -359,19 +387,15 @@ export default function App() {
           </div>
         )}
 
-        {/* ── EMPLOYEES ── */}
         {tab==="employees"&&(
           <div>
             <h1 className="page-title">Employees</h1>
-
-            {/* Role info banner */}
             <div style={{background:"#EEEDFE",borderRadius:10,padding:"10px 16px",marginBottom:16,fontSize:13,color:"#3C3489"}}>
               {isAdmin&&"👑 Admin — You can view, edit and delete all employees."}
               {isHR&&"👩‍💼 HR — You can view and edit employee details."}
               {isManager&&"👔 Manager — You can view all employees."}
               {isEmployee&&"👤 Employee — You can view the employee directory."}
             </div>
-
             <div className="card">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div className="card-title" style={{margin:0}}>👥 All employees — {filteredEmployees.length} total</div>
@@ -419,22 +443,53 @@ export default function App() {
           </div>
         )}
 
-        {/* ── ATTENDANCE ── */}
         {tab==="attendance"&&(
           <div>
             <h1 className="page-title">Attendance</h1>
+
+            {/* Check in/out card — available to ALL roles */}
+            <div className="card" style={{marginBottom:16}}>
+              <div className="card-title">🕐 Today's attendance</div>
+              <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+                <div style={{fontSize:14,color:"#555"}}>
+                  {myTodayRecord
+                    ? myTodayRecord.status === "Absent"
+                      ? <span className="pill pill-red">Absent today</span>
+                      : <>
+                          <span className={`pill ${myTodayRecord.status==="Present"?"pill-green":"pill-amber"}`}>{myTodayRecord.status}</span>
+                          <span style={{marginLeft:10,color:"#888"}}>
+                            In: {myTodayRecord.check_in?.slice(0,5)||"—"} · Out: {myTodayRecord.check_out?.slice(0,5)||"—"}
+                            {myTodayRecord.working_hours?` · ${Number(myTodayRecord.working_hours).toFixed(1)}h`:""}
+                          </span>
+                        </>
+                    : <span style={{color:"#888"}}>Not checked in yet today</span>
+                  }
+                </div>
+                <div style={{display:"flex",gap:10}}>
+                  {!myTodayRecord&&(
+                    <button className="btn btn-primary" onClick={checkIn}>✅ Check In</button>
+                  )}
+                  {myTodayRecord&&!myTodayRecord.check_out&&myTodayRecord.status!=="Absent"&&(
+                    <button className="btn btn-success" onClick={checkOut}>👋 Check Out</button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* My attendance history */}
             <div className="card">
-              <div className="card-title">🕐 My attendance</div>
-              <button className="btn btn-primary" style={{marginBottom:16}} onClick={checkIn}>✅ Check In Now</button>
+              <div className="card-title">📋 My attendance history</div>
               <table>
-                <thead><tr><th>Date</th><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th></tr></thead>
+                <thead>
+                  <tr><th>Date</th><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th></tr>
+                </thead>
                 <tbody>
                   {attendance.map(a=>(
                     <tr key={a.id}>
                       <td>{a.date?.slice(0,10)}</td>
-                      <td>{a.check_in?.slice(0,5)||"—"}</td>
-                      <td>{a.check_out?.slice(0,5)||"—"}</td>
-                      <td>{a.working_hours?`${Number(a.working_hours).toFixed(1)}h`:"—"}</td>
+                      <td>{a.status==="Absent"?"—":a.check_in?.slice(0,5)||"—"}</td>
+                      <td>{a.status==="Absent"?"—":a.check_out?.slice(0,5)||"—"}</td>
+                      <td>{a.status==="Absent"?"—":a.working_hours?`${Number(a.working_hours).toFixed(1)}h`:"—"}</td>
                       <td><span className={`pill ${a.status==="Present"?"pill-green":a.status==="Late"?"pill-amber":"pill-red"}`}>{a.status}</span></td>
                     </tr>
                   ))}
@@ -442,18 +497,21 @@ export default function App() {
               </table>
             </div>
 
+            {/* All employees attendance — Admin, HR, Manager only */}
             {canViewAllAttendance&&(
               <div className="card">
-                <div className="card-title">📋 Today's attendance — all employees</div>
+                <div className="card-title">👥 Today's attendance — all employees</div>
                 <table>
-                  <thead><tr><th>Employee</th><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th></tr></thead>
+                  <thead>
+                    <tr><th>Employee</th><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th></tr>
+                  </thead>
                   <tbody>
                     {todayAttendance.map(a=>(
                       <tr key={a.id}>
                         <td><strong>{a.employee_name}</strong></td>
-                        <td>{a.check_in?.slice(0,5)||"—"}</td>
-                        <td>{a.check_out?.slice(0,5)||"—"}</td>
-                        <td>{a.working_hours?`${Number(a.working_hours).toFixed(1)}h`:"—"}</td>
+                        <td>{a.status==="Absent"?"—":a.check_in?.slice(0,5)||"—"}</td>
+                        <td>{a.status==="Absent"?"—":a.check_out?.slice(0,5)||"—"}</td>
+                        <td>{a.status==="Absent"?"—":a.working_hours?`${Number(a.working_hours).toFixed(1)}h`:"—"}</td>
                         <td><span className={`pill ${a.status==="Present"?"pill-green":a.status==="Late"?"pill-amber":"pill-red"}`}>{a.status}</span></td>
                       </tr>
                     ))}
@@ -464,7 +522,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ── LEAVE ── */}
         {tab==="leave"&&(
           <div>
             <h1 className="page-title">Leave Management</h1>
@@ -532,11 +589,9 @@ export default function App() {
           </div>
         )}
 
-        {/* ── ASSETS ── */}
         {tab==="assets"&&(
           <div>
             <h1 className="page-title">Asset Management</h1>
-
             {canAllocateAsset&&(
               <div className="card">
                 <div className="card-title">🖥️ Allocate asset</div>
@@ -559,7 +614,6 @@ export default function App() {
                 </form>
               </div>
             )}
-
             <div className="card">
               <div className="card-title">📋 All assets</div>
               <table>
@@ -574,7 +628,6 @@ export default function App() {
                 </tbody>
               </table>
             </div>
-
             <div className="card">
               <div className="card-title">📦 Asset allocations</div>
               <table>
@@ -594,7 +647,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ── REPORTS (Admin + HR only) ── */}
         {tab==="reports"&&canViewReports&&(
           <div>
             <h1 className="page-title">Reports & Analytics</h1>
@@ -633,7 +685,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ── NOTIFICATIONS ── */}
         {tab==="notifications"&&(
           <div>
             <h1 className="page-title">Notifications</h1>
