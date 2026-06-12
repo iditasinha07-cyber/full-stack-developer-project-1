@@ -7,7 +7,7 @@ import {
 } from "recharts";
 import "./App.css";
 
-const API = "http://localhost:5000/api";
+const API = "https://isoftzone-hrms-backend.onrender.com/api";
 const COLORS = ["#534AB7","#0F6E56","#BA7517","#1D9E75","#A32D2D","#0C447C","#633806","#27500A"];
 
 function initials(name) {
