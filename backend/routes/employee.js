@@ -63,7 +63,7 @@ router.get("/meta/stats", async (req, res) => {
   }
 });
 
-// GET single employee — must be after /meta routes
+// GET single employee
 router.get("/:id", async (req, res) => {
   try {
     const result = await pool.query(`

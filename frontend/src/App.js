@@ -3,7 +3,7 @@ import axios from "axios";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   PieChart, Pie, Cell, ResponsiveContainer,
-  Legend, LineChart, Line, CartesianGrid
+  Legend, CartesianGrid
 } from "recharts";
 import "./App.css";
 
@@ -14,10 +14,35 @@ function initials(name) {
   return name ? name.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2) : "?";
 }
 
-function AuthPage({ onLogin }) {
+function getPasswordStrength(password) {
+  if (!password) return null;
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+  const score = [hasUpper, hasLower, hasNumber, hasSpecial, password.length >= 8].filter(Boolean).length;
+  if (score <= 2) return "weak";
+  if (score <= 3) return "medium";
+  return "strong";
+}
+
+function PasswordStrength({ password }) {
+  const strength = getPasswordStrength(password);
+  if (!strength) return null;
+  const labels = { weak: "Weak — add uppercase, numbers & symbols", medium: "Medium — add symbols", strong: "Strong password ✓" };
+  return (
+    <div className="password-strength">
+      <div className={`strength-bar ${strength}`}></div>
+      <span className={`strength-${strength}`}>{labels[strength]}</span>
+    </div>
+  );
+}
+
+function AuthPage({ onLogin, darkMode }) {
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState({ name:"", email:"", password:"", confirmPassword:"", role:"employee" });
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [forgotMode, setForgotMode] = useState(false);
@@ -28,10 +53,12 @@ function AuthPage({ onLogin }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    setError("");
+    setError(""); setSuccess("");
     if (mode==="signup" && form.password !== form.confirmPassword) {
-      setError("Passwords do not match!");
-      return;
+      setError("Passwords do not match!"); return;
+    }
+    if (mode==="signup" && getPasswordStrength(form.password) === "weak") {
+      setError("Password is too weak! Add uppercase letters, numbers and special characters."); return;
     }
     try {
       const url = mode==="login" ? `${API}/auth/login` : `${API}/auth/signup`;
@@ -41,7 +68,7 @@ function AuthPage({ onLogin }) {
         localStorage.setItem("user", JSON.stringify(res.data.user));
         onLogin(res.data.user);
       } else {
-        alert("Account created! Please login.");
+        setSuccess("Account created! Please sign in.");
         setMode("login");
       }
     } catch (err) {
@@ -62,15 +89,22 @@ function AuthPage({ onLogin }) {
   if (forgotMode) {
     return (
       <div className="auth-page">
-        <div className="auth-box">
-          <div className="auth-logo"><h1>🏢 iSoftzone HRMS</h1><p>Password Recovery</p></div>
-          <h2>Forgot password</h2>
-          {forgotMsg && <p style={{color:"#0F6E56",fontSize:13,marginBottom:12,background:"#EAF3DE",padding:"8px 12px",borderRadius:8}}>{forgotMsg}</p>}
-          <form onSubmit={sendForgotPassword}>
-            <input type="email" placeholder="Enter your email address" value={forgotEmail} onChange={e=>setForgotEmail(e.target.value)} required/>
-            <button type="submit" className="btn-auth">Send reset link</button>
-          </form>
-          <p className="auth-switch"><span onClick={()=>setForgotMode(false)}>← Back to login</span></p>
+        <div className="auth-left">
+          <h1>🏢 iSoftzone HRMS</h1>
+          <p>Reset your password and get back to managing your team.</p>
+        </div>
+        <div className="auth-right">
+          <div className="auth-box">
+            <div className="auth-logo"><h2>🏢 iSoftzone HRMS</h2></div>
+            <h3>Reset password</h3>
+            <p className="subtitle">Enter your email to receive a reset link</p>
+            {forgotMsg && <p className="success-msg">{forgotMsg}</p>}
+            <form onSubmit={sendForgotPassword}>
+              <input type="email" placeholder="Email address" value={forgotEmail} onChange={e=>setForgotEmail(e.target.value)} required/>
+              <button type="submit" className="btn-auth">Send reset link</button>
+            </form>
+            <p className="auth-switch"><span onClick={()=>setForgotMode(false)}>← Back to login</span></p>
+          </div>
         </div>
       </div>
     );
@@ -78,42 +112,59 @@ function AuthPage({ onLogin }) {
 
   return (
     <div className="auth-page">
-      <div className="auth-box">
-        <div className="auth-logo"><h1>🏢 iSoftzone HRMS</h1><p>Human Resource Management System</p></div>
-        <h2>{mode==="login"?"Welcome back":"Create account"}</h2>
-        {error && <p style={{color:"#A32D2D",fontSize:13,marginBottom:12,background:"#FCEBEB",padding:"8px 12px",borderRadius:8}}>{error}</p>}
-        <form onSubmit={submit}>
-          {mode==="signup" && <input name="name" placeholder="Full name" onChange={handle} required/>}
-          <input name="email" type="email" placeholder="Email address" onChange={handle} required/>
-          <div style={{position:"relative",marginBottom:12}}>
-            <input name="password" type={showPassword?"text":"password"} placeholder="Password" onChange={handle} required style={{width:"100%",paddingRight:40,marginBottom:0}}/>
-            <span onClick={()=>setShowPassword(!showPassword)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",cursor:"pointer",fontSize:16,color:"#888"}}>
-              {showPassword?"🙈":"👁️"}
-            </span>
-          </div>
-          {mode==="signup" && (
-            <div style={{position:"relative",marginBottom:12}}>
-              <input name="confirmPassword" type={showConfirm?"text":"password"} placeholder="Confirm password" onChange={handle} required style={{width:"100%",paddingRight:40,marginBottom:0}}/>
-              <span onClick={()=>setShowConfirm(!showConfirm)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",cursor:"pointer",fontSize:16,color:"#888"}}>
-                {showConfirm?"🙈":"👁️"}
+      <div className="auth-left">
+        <h1>🏢 iSoftzone HRMS</h1>
+        <p>Complete Human Resource Management System for modern enterprises.</p>
+        <div className="features">
+          <div className="feature">✅ Employee Management</div>
+          <div className="feature">✅ Leave & Attendance Tracking</div>
+          <div className="feature">✅ Payroll with TDS & PF</div>
+          <div className="feature">✅ Asset Management</div>
+          <div className="feature">✅ Analytics & Reports</div>
+          <div className="feature">✅ Role-Based Access Control</div>
+        </div>
+      </div>
+      <div className="auth-right">
+        <div className="auth-box">
+          <div className="auth-logo"><h2>🏢 iSoftzone HRMS</h2><p>Human Resource Management System</p></div>
+          <h3>{mode==="login"?"Welcome back":"Create account"}</h3>
+          <p className="subtitle">{mode==="login"?"Sign in to your account":"Fill in your details to get started"}</p>
+          {error && <p className="error-msg">{error}</p>}
+          {success && <p className="success-msg">{success}</p>}
+          <form onSubmit={submit}>
+            {mode==="signup" && <input name="name" placeholder="Full name" onChange={handle} required/>}
+            <input name="email" type="email" placeholder="Email address" onChange={handle} required/>
+            <div style={{position:"relative",marginBottom:4}}>
+              <input name="password" type={showPassword?"text":"password"} placeholder="Password" onChange={handle} required style={{width:"100%",paddingRight:40,marginBottom:0}}/>
+              <span onClick={()=>setShowPassword(!showPassword)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",cursor:"pointer",fontSize:16,color:"#888"}}>
+                {showPassword?"🙈":"👁️"}
               </span>
             </div>
-          )}
-          {mode==="signup" && (
-            <select name="role" onChange={handle}>
-              <option value="employee">Employee</option>
-              <option value="hr">HR</option>
-              <option value="manager">Manager</option>
-              <option value="admin">Admin</option>
-            </select>
-          )}
-          <button type="submit" className="btn-auth">{mode==="login"?"Sign in":"Create account"}</button>
-        </form>
-        {mode==="login" && <p className="auth-switch"><span onClick={()=>setForgotMode(true)}>Forgot password?</span></p>}
-        <p className="auth-switch">
-          {mode==="login"?"Don't have an account? ":"Already have an account? "}
-          <span onClick={()=>setMode(mode==="login"?"signup":"login")}>{mode==="login"?"Sign up":"Sign in"}</span>
-        </p>
+            {mode==="signup" && <PasswordStrength password={form.password}/>}
+            {mode==="signup" && (
+              <div style={{position:"relative",marginBottom:12}}>
+                <input name="confirmPassword" type={showConfirm?"text":"password"} placeholder="Confirm password" onChange={handle} required style={{width:"100%",paddingRight:40,marginBottom:0}}/>
+                <span onClick={()=>setShowConfirm(!showConfirm)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",cursor:"pointer",fontSize:16,color:"#888"}}>
+                  {showConfirm?"🙈":"👁️"}
+                </span>
+              </div>
+            )}
+            {mode==="signup" && (
+              <select name="role" onChange={handle}>
+                <option value="employee">Employee</option>
+                <option value="hr">HR</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
+              </select>
+            )}
+            <button type="submit" className="btn-auth">{mode==="login"?"Sign in":"Create account"}</button>
+          </form>
+          {mode==="login" && <p className="auth-switch"><span onClick={()=>setForgotMode(true)}>Forgot password?</span></p>}
+          <p className="auth-switch">
+            {mode==="login"?"Don't have an account? ":"Already have an account? "}
+            <span onClick={()=>setMode(mode==="login"?"signup":"login")}>{mode==="login"?"Sign up":"Sign in"}</span>
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -173,6 +224,7 @@ function EditModal({ emp, departments, onClose, onSave }) {
 
 export default function App() {
   const [user, setUser] = useState(()=>{const u=localStorage.getItem("user");return u?JSON.parse(u):null;});
+  const [darkMode, setDarkMode] = useState(false);
   const [tab, setTab] = useState("dashboard");
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -200,7 +252,6 @@ export default function App() {
   const isAdmin    = user?.role === "admin";
   const isHR       = user?.role === "hr";
   const isManager  = user?.role === "manager";
-  const isEmployee = user?.role === "employee";
   const canEditEmployee      = isAdmin || isHR;
   const canDeleteEmployee    = isAdmin;
   const canApproveLeave      = isAdmin || isHR || isManager;
@@ -208,7 +259,10 @@ export default function App() {
   const canViewReports       = isAdmin || isHR;
   const canViewAllAttendance = isAdmin || isHR || isManager;
   const canManagePayroll     = isAdmin || isHR;
-  const canMarkAttendance    = !isAdmin;
+
+  useEffect(()=>{
+    document.body.className = darkMode ? "dark" : "light";
+  },[darkMode]);
 
   const fetchAll = () => {
     axios.get(`${API}/employees`).then(r=>setEmployees(r.data)).catch(()=>{});
@@ -241,19 +295,13 @@ export default function App() {
   const generatePayroll = async(e)=>{e.preventDefault();try{await axios.post(`${API}/payroll/generate`,payrollForm);alert("Payroll generated!");fetchAll();}catch(err){alert(err.response?.data?.message||"Error");}};
 
   const checkIn = async() => {
-    try {
-      await axios.post(`${API}/attendance/checkin`,{employee_id:user.id});
-      alert("✅ Checked in!");
-      fetchAll();
-    } catch(err) { alert(err.response?.data?.message||"Error"); }
+    try { await axios.post(`${API}/attendance/checkin`,{employee_id:user.id}); alert("✅ Checked in!"); fetchAll(); }
+    catch(err) { alert(err.response?.data?.message||"Error"); }
   };
 
   const checkOut = async() => {
-    try {
-      await axios.put(`${API}/attendance/checkout/${user.id}`);
-      alert("👋 Checked out!");
-      fetchAll();
-    } catch(err) { alert(err.response?.data?.message||"Error"); }
+    try { await axios.put(`${API}/attendance/checkout/${user.id}`); alert("👋 Checked out!"); fetchAll(); }
+    catch(err) { alert(err.response?.data?.message||"Error"); }
   };
 
   const unreadCount = notifications.filter(n=>!n.is_read).length;
@@ -262,7 +310,6 @@ export default function App() {
     e.email?.toLowerCase().includes(search.toLowerCase())||
     e.department_name?.toLowerCase().includes(search.toLowerCase())
   );
-
   const todayStr = new Date().toISOString().slice(0,10);
   const myTodayRecord = attendance.find(a=>a.date?.slice(0,10)===todayStr);
 
@@ -278,7 +325,7 @@ export default function App() {
     {key:"notifications",icon:"🔔",label:`Notifications${unreadCount>0?` (${unreadCount})`:""}`},
   ];
 
-  if(!user) return <AuthPage onLogin={(u)=>setUser(u)}/>;
+  if(!user) return <AuthPage onLogin={(u)=>setUser(u)} darkMode={darkMode}/>;
 
   return (
     <div style={{display:"flex"}}>
@@ -296,13 +343,13 @@ export default function App() {
         <div className="sidebar-user">
           <div className="avatar">{initials(user.name)}</div>
           <div className="info"><p>{user.name}</p><span>{user.role}</span></div>
+          <button className="theme-btn" onClick={()=>setDarkMode(!darkMode)}>{darkMode?"☀️":"🌙"}</button>
           <button className="logout-btn" onClick={logout} title="Logout">⏻</button>
         </div>
       </div>
 
       <div className="main">
 
-        {/* DASHBOARD */}
         {tab==="dashboard"&&(
           <div>
             <h1 className="page-title">Dashboard</h1>
@@ -314,7 +361,7 @@ export default function App() {
               <div className="stat-card stat-red"><div className="stat-icon">❌</div><div className="stat-label">Rejected leaves</div><div className="stat-value">{stats.rejected||0}</div></div>
               <div className="stat-card stat-purple"><div className="stat-icon">💻</div><div className="stat-label">Total assets</div><div className="stat-value">{assets.length}</div></div>
               <div className="stat-card stat-green"><div className="stat-icon">🕐</div><div className="stat-label">Present today</div><div className="stat-value">{todayAttendance.filter(a=>a.status==="Present").length}</div></div>
-              <div className="stat-card stat-amber"><div className="stat-icon">💰</div><div className="stat-label">Total net salary</div><div className="stat-value" style={{fontSize:16}}>₹{Number(payrollStats.total_net||0).toLocaleString("en-IN")}</div></div>
+              <div className="stat-card stat-amber"><div className="stat-icon">💰</div><div className="stat-label">Net salary paid</div><div className="stat-value" style={{fontSize:16}}>₹{Number(payrollStats.total_net||0).toLocaleString("en-IN")}</div></div>
             </div>
 
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
@@ -324,8 +371,7 @@ export default function App() {
                   <BarChart data={deptStats}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
                     <XAxis dataKey="department_name" tick={{fontSize:10}}/>
-                    <YAxis tick={{fontSize:11}}/>
-                    <Tooltip/>
+                    <YAxis tick={{fontSize:11}}/><Tooltip/>
                     <Bar dataKey="total_employees" fill="#534AB7" radius={[4,4,0,0]}/>
                   </BarChart>
                 </ResponsiveContainer>
@@ -379,7 +425,7 @@ export default function App() {
 
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
               <div className="card">
-                <div className="card-title">📅 Recent Leave Applications</div>
+                <div className="card-title">📅 Recent Leaves</div>
                 {leaves.slice(0,5).map(l=>(
                   <div key={l.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f5f5f5"}}>
                     <div>
@@ -392,30 +438,17 @@ export default function App() {
               </div>
               <div className="card">
                 <div className="card-title">💰 Payroll Summary</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-                  <div style={{background:"#f8f8ff",borderRadius:8,padding:12}}>
-                    <div style={{fontSize:11,color:"#888"}}>Total Gross</div>
-                    <div style={{fontSize:16,fontWeight:600,color:"#534AB7"}}>₹{Number(payrollStats.total_gross||0).toLocaleString("en-IN")}</div>
-                  </div>
-                  <div style={{background:"#f0faf6",borderRadius:8,padding:12}}>
-                    <div style={{fontSize:11,color:"#888"}}>Total Net</div>
-                    <div style={{fontSize:16,fontWeight:600,color:"#0F6E56"}}>₹{Number(payrollStats.total_net||0).toLocaleString("en-IN")}</div>
-                  </div>
-                  <div style={{background:"#fff8f0",borderRadius:8,padding:12}}>
-                    <div style={{fontSize:11,color:"#888"}}>Total TDS</div>
-                    <div style={{fontSize:16,fontWeight:600,color:"#BA7517"}}>₹{Number(payrollStats.total_tds||0).toLocaleString("en-IN")}</div>
-                  </div>
-                  <div style={{background:"#fff0f0",borderRadius:8,padding:12}}>
-                    <div style={{fontSize:11,color:"#888"}}>Total PF</div>
-                    <div style={{fontSize:16,fontWeight:600,color:"#A32D2D"}}>₹{Number(payrollStats.total_pf||0).toLocaleString("en-IN")}</div>
-                  </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  <div style={{background:"#f8f8ff",borderRadius:8,padding:12}}><div style={{fontSize:11,color:"#888"}}>Total Gross</div><div style={{fontSize:16,fontWeight:600,color:"#534AB7"}}>₹{Number(payrollStats.total_gross||0).toLocaleString("en-IN")}</div></div>
+                  <div style={{background:"#f0faf6",borderRadius:8,padding:12}}><div style={{fontSize:11,color:"#888"}}>Total Net</div><div style={{fontSize:16,fontWeight:600,color:"#0F6E56"}}>₹{Number(payrollStats.total_net||0).toLocaleString("en-IN")}</div></div>
+                  <div style={{background:"#fff8f0",borderRadius:8,padding:12}}><div style={{fontSize:11,color:"#888"}}>Total TDS</div><div style={{fontSize:16,fontWeight:600,color:"#BA7517"}}>₹{Number(payrollStats.total_tds||0).toLocaleString("en-IN")}</div></div>
+                  <div style={{background:"#fff0f0",borderRadius:8,padding:12}}><div style={{fontSize:11,color:"#888"}}>Total PF</div><div style={{fontSize:16,fontWeight:600,color:"#A32D2D"}}>₹{Number(payrollStats.total_pf||0).toLocaleString("en-IN")}</div></div>
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* EMPLOYEES */}
         {tab==="employees"&&(
           <div>
             <h1 className="page-title">Employees</h1>
@@ -423,7 +456,7 @@ export default function App() {
               {isAdmin&&"👑 Admin — Full access to view, edit and delete."}
               {isHR&&"👩‍💼 HR — Can view and edit employee details."}
               {isManager&&"👔 Manager — Can view all employees."}
-              {isEmployee&&"👤 Employee — Can view the employee directory."}
+              {!isAdmin&&!isHR&&!isManager&&"👤 Employee — Can view the employee directory."}
             </div>
             <div className="card">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
@@ -431,20 +464,13 @@ export default function App() {
                 <input placeholder="🔍 Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{padding:"8px 14px",border:"1px solid #e0e0e0",borderRadius:8,fontSize:13,width:280}}/>
               </div>
               <table>
-                <thead>
-                  <tr>
-                    <th>Employee</th><th>Designation</th><th>Department</th><th>Phone</th>
-                    {(isAdmin||isHR)&&<th>Salary</th>}
-                    <th>Role</th>
-                    {canEditEmployee&&<th>Actions</th>}
-                  </tr>
-                </thead>
+                <thead><tr><th>Employee</th><th>Designation</th><th>Department</th><th>Phone</th>{(isAdmin||isHR)&&<th>Salary</th>}<th>Role</th>{canEditEmployee&&<th>Actions</th>}</tr></thead>
                 <tbody>
                   {filteredEmployees.map(emp=>(
                     <tr key={emp.id}>
                       <td>
                         <div className="emp-cell">
-                          {emp.profile_image?<img src={`http://localhost:5000/uploads/${emp.profile_image}`} alt={emp.name} style={{width:34,height:34,borderRadius:"50%",objectFit:"cover"}}/>:<div className="avatar">{initials(emp.name)}</div>}
+                          {emp.profile_image?<img src={`https://isoftzone-hrms-backend.onrender.com/uploads/${emp.profile_image}`} alt={emp.name} style={{width:34,height:34,borderRadius:"50%",objectFit:"cover"}}/>:<div className="avatar">{initials(emp.name)}</div>}
                           <div><div style={{fontWeight:500}}>{emp.name}</div><div style={{fontSize:12,color:"#888"}}>{emp.email}</div></div>
                         </div>
                       </td>
@@ -454,20 +480,16 @@ export default function App() {
                       {(isAdmin||isHR)&&<td>{emp.salary?`₹${Number(emp.salary).toLocaleString("en-IN")}`:"—"}</td>}
                       <td><span className={`pill ${emp.role==="admin"?"pill-red":emp.role==="hr"?"pill-green":emp.role==="manager"?"pill-amber":"pill-blue"}`}>{emp.role}</span></td>
                       {canEditEmployee&&(
-                        <td>
-                          <div className="actions-row">
-                            <button className="btn btn-edit" onClick={()=>setEditEmp(emp)}>Edit</button>
-                            {canDeleteEmployee&&<button className="btn btn-danger" onClick={()=>deleteEmployee(emp.id)}>Delete</button>}
-                          </div>
-                        </td>
+                        <td><div className="actions-row">
+                          <button className="btn btn-edit" onClick={()=>setEditEmp(emp)}>Edit</button>
+                          {canDeleteEmployee&&<button className="btn btn-danger" onClick={()=>deleteEmployee(emp.id)}>Delete</button>}
+                        </div></td>
                       )}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-
-            {/* Department distribution chart */}
             <div className="card">
               <div className="card-title">📊 Department Distribution</div>
               <ResponsiveContainer width="100%" height={250}>
@@ -482,7 +504,6 @@ export default function App() {
           </div>
         )}
 
-        {/* MY ATTENDANCE */}
         {tab==="attendance"&&!isAdmin&&(
           <div>
             <h1 className="page-title">My Attendance</h1>
@@ -493,10 +514,7 @@ export default function App() {
                   {myTodayRecord
                     ? myTodayRecord.status==="Absent"
                       ? <span className="pill pill-red">Absent today</span>
-                      : <>
-                          <span className={`pill ${myTodayRecord.status==="Present"?"pill-green":"pill-amber"}`}>{myTodayRecord.status}</span>
-                          <span style={{marginLeft:10,color:"#888"}}>In: {myTodayRecord.check_in?.slice(0,5)||"—"} · Out: {myTodayRecord.check_out?.slice(0,5)||"—"}{myTodayRecord.working_hours?` · ${Number(myTodayRecord.working_hours).toFixed(1)}h`:""}</span>
-                        </>
+                      : <><span className={`pill ${myTodayRecord.status==="Present"?"pill-green":"pill-amber"}`}>{myTodayRecord.status}</span><span style={{marginLeft:10,color:"#888"}}>In: {myTodayRecord.check_in?.slice(0,5)||"—"} · Out: {myTodayRecord.check_out?.slice(0,5)||"—"}</span></>
                     : <span style={{color:"#888"}}>Not checked in yet</span>
                   }
                 </div>
@@ -506,7 +524,6 @@ export default function App() {
                 </div>
               </div>
             </div>
-
             <div className="card">
               <div className="card-title">📅 Attendance History</div>
               <table>
@@ -524,8 +541,6 @@ export default function App() {
                 </tbody>
               </table>
             </div>
-
-            {/* Attendance chart */}
             <div className="card">
               <div className="card-title">📊 My Attendance Analytics</div>
               <ResponsiveContainer width="100%" height={220}>
@@ -544,19 +559,9 @@ export default function App() {
           </div>
         )}
 
-        {/* ALL ATTENDANCE — Admin, HR, Manager */}
         {tab==="allattendance"&&canViewAllAttendance&&(
           <div>
             <h1 className="page-title">All Attendance</h1>
-
-            {/* Admin sees overview only, no check in */}
-            {isAdmin&&(
-              <div className="card" style={{background:"#EEEDFE",border:"none"}}>
-                <p style={{fontSize:14,color:"#3C3489"}}>👑 As Admin you can monitor all attendance records. Employees check in themselves.</p>
-              </div>
-            )}
-
-            {/* HR and Manager can also check in */}
             {(isHR||isManager)&&(
               <div className="card">
                 <div className="card-title">🕐 My attendance today</div>
@@ -572,9 +577,8 @@ export default function App() {
                 </div>
               </div>
             )}
-
             <div className="card">
-              <div className="card-title">👥 Today's attendance — all employees</div>
+              <div className="card-title">👥 Today's attendance</div>
               <table>
                 <thead><tr><th>Employee</th><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th></tr></thead>
                 <tbody>
@@ -590,10 +594,8 @@ export default function App() {
                 </tbody>
               </table>
             </div>
-
-            {/* Attendance analytics chart */}
             <div className="card">
-              <div className="card-title">📊 Today's Attendance Analytics</div>
+              <div className="card-title">📊 Attendance Analytics</div>
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={[
                   {name:"Present",count:todayAttendance.filter(a=>a.status==="Present").length},
@@ -601,9 +603,7 @@ export default function App() {
                   {name:"Absent",count:todayAttendance.filter(a=>a.status==="Absent").length}
                 ]}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-                  <XAxis dataKey="name"/>
-                  <YAxis/>
-                  <Tooltip/>
+                  <XAxis dataKey="name"/><YAxis/><Tooltip/>
                   <Bar dataKey="count" radius={[6,6,0,0]}>
                     <Cell fill="#0F6E56"/><Cell fill="#BA7517"/><Cell fill="#A32D2D"/>
                   </Bar>
@@ -613,13 +613,12 @@ export default function App() {
           </div>
         )}
 
-        {/* LEAVE */}
         {tab==="leave"&&(
           <div>
             <h1 className="page-title">Leave Management</h1>
             <div className="tabs">
               <button className={`tab ${leaveTab==="apply"?"active":""}`} onClick={()=>setLeaveTab("apply")}>Apply</button>
-              <button className={`tab ${leaveTab==="approvals"?"active":""}`} onClick={()=>setLeaveTab("approvals")}>All applications</button>
+              <button className={`tab ${leaveTab==="approvals"?"active":""}`} onClick={()=>setLeaveTab("approvals")}>Applications</button>
               <button className={`tab ${leaveTab==="chart"?"active":""}`} onClick={()=>setLeaveTab("chart")}>Analytics</button>
             </div>
             {leaveTab==="apply"&&(
@@ -654,7 +653,7 @@ export default function App() {
             )}
             {leaveTab==="approvals"&&(
               <div className="card">
-                <div className="card-title">📋 All leave applications</div>
+                <div className="card-title">📋 All applications</div>
                 <table>
                   <thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead>
                   <tbody>
@@ -680,45 +679,37 @@ export default function App() {
               </div>
             )}
             {leaveTab==="chart"&&(
-              <div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-                  <div className="card">
-                    <div className="card-title">🥧 Leave Status Distribution</div>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <PieChart>
-                        <Pie data={[
-                          {name:"Approved",value:Number(stats.approved||0)},
-                          {name:"Pending",value:Number(stats.pending||0)},
-                          {name:"Rejected",value:Number(stats.rejected||0)}
-                        ]} cx="50%" cy="50%" outerRadius={90} dataKey="value" label>
-                          <Cell fill="#0F6E56"/><Cell fill="#BA7517"/><Cell fill="#A32D2D"/>
-                        </Pie>
-                        <Tooltip/><Legend/>
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="card">
-                    <div className="card-title">📊 Leave by Type</div>
-                    <ResponsiveContainer width="100%" height={250}>
-                      <BarChart data={leaveTypes.map(lt=>({
-                        name:lt.leave_name,
-                        count:leaves.filter(l=>l.leave_name===lt.leave_name).length
-                      }))}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-                        <XAxis dataKey="name" tick={{fontSize:11}}/>
-                        <YAxis/>
-                        <Tooltip/>
-                        <Bar dataKey="count" fill="#534AB7" radius={[4,4,0,0]}/>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+                <div className="card">
+                  <div className="card-title">🥧 Leave Status</div>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <PieChart>
+                      <Pie data={[
+                        {name:"Approved",value:Number(stats.approved||0)},
+                        {name:"Pending",value:Number(stats.pending||0)},
+                        {name:"Rejected",value:Number(stats.rejected||0)}
+                      ]} cx="50%" cy="50%" outerRadius={90} dataKey="value" label>
+                        <Cell fill="#0F6E56"/><Cell fill="#BA7517"/><Cell fill="#A32D2D"/>
+                      </Pie>
+                      <Tooltip/><Legend/>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="card">
+                  <div className="card-title">📊 Leave by Type</div>
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={leaveTypes.map(lt=>({name:lt.leave_name,count:leaves.filter(l=>l.leave_name===lt.leave_name).length}))}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
+                      <XAxis dataKey="name" tick={{fontSize:11}}/><YAxis/><Tooltip/>
+                      <Bar dataKey="count" fill="#534AB7" radius={[4,4,0,0]}/>
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* ASSETS */}
         {tab==="assets"&&(
           <div>
             <h1 className="page-title">Asset Management</h1>
@@ -762,13 +753,8 @@ export default function App() {
               <div className="card">
                 <div className="card-title">📊 Assets by Type</div>
                 <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={[...new Set(assets.map(a=>a.asset_type))].map(type=>({
-                    name:type,
-                    count:assets.filter(a=>a.asset_type===type).length
-                  }))}>
-                    <XAxis dataKey="name" tick={{fontSize:11}}/>
-                    <YAxis/>
-                    <Tooltip/>
+                  <BarChart data={[...new Set(assets.map(a=>a.asset_type))].map(type=>({name:type,count:assets.filter(a=>a.asset_type===type).length}))}>
+                    <XAxis dataKey="name" tick={{fontSize:11}}/><YAxis/><Tooltip/>
                     <Bar dataKey="count" fill="#534AB7" radius={[4,4,0,0]}/>
                   </BarChart>
                 </ResponsiveContainer>
@@ -807,7 +793,6 @@ export default function App() {
           </div>
         )}
 
-        {/* PAYROLL */}
         {tab==="payroll"&&(
           <div>
             <h1 className="page-title">Payroll</h1>
@@ -817,7 +802,6 @@ export default function App() {
               {canManagePayroll&&<button className={`tab ${payrollTab==="generate"?"active":""}`} onClick={()=>setPayrollTab("generate")}>Generate</button>}
               <button className={`tab ${payrollTab==="chart"?"active":""}`} onClick={()=>setPayrollTab("chart")}>Analytics</button>
             </div>
-
             {payrollTab==="generate"&&canManagePayroll&&(
               <div className="card">
                 <div className="card-title">💰 Generate payroll</div>
@@ -836,24 +820,19 @@ export default function App() {
                       </select>
                     </div>
                   </div>
-                  <div className="form-row">
-                    <div className="form-group"><label>Year</label>
-                      <input type="number" value={payrollForm.year} onChange={e=>setPayrollForm({...payrollForm,year:e.target.value})}/>
-                    </div>
-                  </div>
+                  <div className="form-group" style={{marginBottom:12}}><label>Year</label><input type="number" value={payrollForm.year} onChange={e=>setPayrollForm({...payrollForm,year:e.target.value})}/></div>
                   <div style={{background:"#f8f8ff",borderRadius:8,padding:12,marginBottom:12,fontSize:13,color:"#534AB7"}}>
-                    💡 Payroll is auto-calculated: Basic + 40% HRA + 20% Allowances — 10% TDS — 12% PF — ESI
+                    💡 Auto-calculated: Basic + 40% HRA + 20% Allowances — 10% TDS — 12% PF — ESI
                   </div>
                   <button type="submit" className="btn btn-primary">Generate payslip</button>
                 </form>
               </div>
             )}
-
             {payrollTab==="all"&&(
               <div className="card">
                 <div className="card-title">📋 All payslips</div>
                 <table>
-                  <thead><tr><th>Employee</th><th>Month</th><th>Gross</th><th>TDS</th><th>PF</th><th>ESI</th><th>Net Salary</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Employee</th><th>Month</th><th>Gross</th><th>TDS</th><th>PF</th><th>Net Salary</th><th>Status</th></tr></thead>
                   <tbody>
                     {payroll.map(p=>(
                       <tr key={p.id}>
@@ -862,7 +841,6 @@ export default function App() {
                         <td>₹{Number(p.gross_salary).toLocaleString("en-IN")}</td>
                         <td style={{color:"#A32D2D"}}>-₹{Number(p.tds).toLocaleString("en-IN")}</td>
                         <td style={{color:"#A32D2D"}}>-₹{Number(p.pf).toLocaleString("en-IN")}</td>
-                        <td style={{color:"#A32D2D"}}>-₹{Number(p.esi).toLocaleString("en-IN")}</td>
                         <td style={{fontWeight:600,color:"#0F6E56"}}>₹{Number(p.net_salary).toLocaleString("en-IN")}</td>
                         <td><span className="pill pill-green">{p.status}</span></td>
                       </tr>
@@ -871,75 +849,38 @@ export default function App() {
                 </table>
               </div>
             )}
-
             {payrollTab==="mine"&&(
               <div>
                 {myPayroll.map(p=>(
                   <div key={p.id} className="card" style={{marginBottom:16}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                      <div>
-                        <div style={{fontSize:18,fontWeight:600}}>Payslip — {p.month} {p.year}</div>
-                        <div style={{fontSize:13,color:"#888"}}>Status: <span className="pill pill-green">{p.status}</span></div>
-                      </div>
-                      <div style={{textAlign:"right"}}>
-                        <div style={{fontSize:22,fontWeight:700,color:"#0F6E56"}}>₹{Number(p.net_salary).toLocaleString("en-IN")}</div>
-                        <div style={{fontSize:12,color:"#888"}}>Net salary</div>
-                      </div>
+                      <div><div style={{fontSize:18,fontWeight:600}}>Payslip — {p.month} {p.year}</div><span className="pill pill-green">{p.status}</span></div>
+                      <div style={{textAlign:"right"}}><div style={{fontSize:22,fontWeight:700,color:"#0F6E56"}}>₹{Number(p.net_salary).toLocaleString("en-IN")}</div><div style={{fontSize:12,color:"#888"}}>Net salary</div></div>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                      <div style={{background:"#f8f8ff",borderRadius:8,padding:10}}>
-                        <div style={{fontSize:11,color:"#888"}}>Basic Salary</div>
-                        <div style={{fontWeight:500}}>₹{Number(p.basic_salary).toLocaleString("en-IN")}</div>
-                      </div>
-                      <div style={{background:"#f8f8ff",borderRadius:8,padding:10}}>
-                        <div style={{fontSize:11,color:"#888"}}>HRA (40%)</div>
-                        <div style={{fontWeight:500}}>₹{Number(p.hra).toLocaleString("en-IN")}</div>
-                      </div>
-                      <div style={{background:"#f8f8ff",borderRadius:8,padding:10}}>
-                        <div style={{fontSize:11,color:"#888"}}>Allowances (20%)</div>
-                        <div style={{fontWeight:500}}>₹{Number(p.allowances).toLocaleString("en-IN")}</div>
-                      </div>
-                      <div style={{background:"#f0faf6",borderRadius:8,padding:10}}>
-                        <div style={{fontSize:11,color:"#888"}}>Gross Salary</div>
-                        <div style={{fontWeight:600,color:"#0F6E56"}}>₹{Number(p.gross_salary).toLocaleString("en-IN")}</div>
-                      </div>
-                      <div style={{background:"#fff8f0",borderRadius:8,padding:10}}>
-                        <div style={{fontSize:11,color:"#888"}}>TDS (10%)</div>
-                        <div style={{fontWeight:500,color:"#A32D2D"}}>-₹{Number(p.tds).toLocaleString("en-IN")}</div>
-                      </div>
-                      <div style={{background:"#fff8f0",borderRadius:8,padding:10}}>
-                        <div style={{fontSize:11,color:"#888"}}>PF (12%)</div>
-                        <div style={{fontWeight:500,color:"#A32D2D"}}>-₹{Number(p.pf).toLocaleString("en-IN")}</div>
-                      </div>
-                      <div style={{background:"#fff8f0",borderRadius:8,padding:10}}>
-                        <div style={{fontSize:11,color:"#888"}}>ESI</div>
-                        <div style={{fontWeight:500,color:"#A32D2D"}}>-₹{Number(p.esi).toLocaleString("en-IN")}</div>
-                      </div>
-                      <div style={{background:"#e8f8f0",borderRadius:8,padding:10}}>
-                        <div style={{fontSize:11,color:"#888"}}>Total Deductions</div>
-                        <div style={{fontWeight:600,color:"#A32D2D"}}>-₹{Number(p.total_deductions).toLocaleString("en-IN")}</div>
-                      </div>
+                      <div style={{background:"#f8f8ff",borderRadius:8,padding:10}}><div style={{fontSize:11,color:"#888"}}>Basic Salary</div><div style={{fontWeight:500}}>₹{Number(p.basic_salary).toLocaleString("en-IN")}</div></div>
+                      <div style={{background:"#f8f8ff",borderRadius:8,padding:10}}><div style={{fontSize:11,color:"#888"}}>HRA (40%)</div><div style={{fontWeight:500}}>₹{Number(p.hra).toLocaleString("en-IN")}</div></div>
+                      <div style={{background:"#f8f8ff",borderRadius:8,padding:10}}><div style={{fontSize:11,color:"#888"}}>Allowances (20%)</div><div style={{fontWeight:500}}>₹{Number(p.allowances).toLocaleString("en-IN")}</div></div>
+                      <div style={{background:"#f0faf6",borderRadius:8,padding:10}}><div style={{fontSize:11,color:"#888"}}>Gross Salary</div><div style={{fontWeight:600,color:"#0F6E56"}}>₹{Number(p.gross_salary).toLocaleString("en-IN")}</div></div>
+                      <div style={{background:"#fff8f0",borderRadius:8,padding:10}}><div style={{fontSize:11,color:"#888"}}>TDS (10%)</div><div style={{fontWeight:500,color:"#A32D2D"}}>-₹{Number(p.tds).toLocaleString("en-IN")}</div></div>
+                      <div style={{background:"#fff8f0",borderRadius:8,padding:10}}><div style={{fontSize:11,color:"#888"}}>PF (12%)</div><div style={{fontWeight:500,color:"#A32D2D"}}>-₹{Number(p.pf).toLocaleString("en-IN")}</div></div>
+                      <div style={{background:"#fff0f0",borderRadius:8,padding:10}}><div style={{fontSize:11,color:"#888"}}>Total Deductions</div><div style={{fontWeight:600,color:"#A32D2D"}}>-₹{Number(p.total_deductions).toLocaleString("en-IN")}</div></div>
+                      <div style={{background:"#e8f8f0",borderRadius:8,padding:10}}><div style={{fontSize:11,color:"#888"}}>Net Salary</div><div style={{fontWeight:700,color:"#0F6E56"}}>₹{Number(p.net_salary).toLocaleString("en-IN")}</div></div>
                     </div>
                   </div>
                 ))}
-                {myPayroll.length===0&&<div className="card"><p style={{color:"#888",fontSize:14}}>No payslips generated yet.</p></div>}
+                {myPayroll.length===0&&<div className="card"><p style={{color:"#888",fontSize:14}}>No payslips yet.</p></div>}
               </div>
             )}
-
             {payrollTab==="chart"&&(
               <div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
                   <div className="card">
                     <div className="card-title">💰 Gross vs Net Salary</div>
                     <ResponsiveContainer width="100%" height={250}>
-                      <BarChart data={payroll.slice(0,10).map(p=>({
-                        name:p.employee_name?.split(" ")[0],
-                        Gross:Number(p.gross_salary),
-                        Net:Number(p.net_salary)
-                      }))}>
+                      <BarChart data={payroll.slice(0,10).map(p=>({name:p.employee_name?.split(" ")[0],Gross:Number(p.gross_salary),Net:Number(p.net_salary)}))}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-                        <XAxis dataKey="name" tick={{fontSize:10}}/>
-                        <YAxis tick={{fontSize:10}}/>
+                        <XAxis dataKey="name" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/>
                         <Tooltip formatter={(v)=>`₹${Number(v).toLocaleString("en-IN")}`}/>
                         <Legend/>
                         <Bar dataKey="Gross" fill="#534AB7" radius={[4,4,0,0]}/>
@@ -968,7 +909,6 @@ export default function App() {
           </div>
         )}
 
-        {/* REPORTS */}
         {tab==="reports"&&canViewReports&&(
           <div>
             <h1 className="page-title">Reports & Analytics</h1>
@@ -978,8 +918,7 @@ export default function App() {
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={deptStats}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-                    <XAxis dataKey="department_name" tick={{fontSize:10}}/>
-                    <YAxis/><Tooltip/>
+                    <XAxis dataKey="department_name" tick={{fontSize:10}}/><YAxis/><Tooltip/>
                     <Bar dataKey="total_employees" fill="#534AB7" radius={[4,4,0,0]}/>
                   </BarChart>
                 </ResponsiveContainer>
@@ -989,8 +928,7 @@ export default function App() {
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={deptStats}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/>
-                    <XAxis dataKey="department_name" tick={{fontSize:10}}/>
-                    <YAxis tick={{fontSize:10}}/>
+                    <XAxis dataKey="department_name" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/>
                     <Tooltip formatter={(v)=>`₹${Number(v).toLocaleString("en-IN")}`}/>
                     <Bar dataKey="avg_salary" fill="#1D9E75" radius={[4,4,0,0]}/>
                   </BarChart>
@@ -1032,7 +970,6 @@ export default function App() {
           </div>
         )}
 
-        {/* NOTIFICATIONS */}
         {tab==="notifications"&&(
           <div>
             <h1 className="page-title">Notifications</h1>
